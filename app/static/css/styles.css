@@ -1,0 +1,104 @@
+/* Estilos personalizados além do Tailwind */
+
+/* Animações suaves */
+.transition-all {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Estilo para inputs e selects */
+input[type="text"],
+select {
+    @apply transition-all;
+}
+
+input[type="text"]:focus,
+select:focus {
+    @apply ring-2 ring-blue-500 border-blue-500;
+}
+
+/* Estilo para o botão de upload de arquivo */
+input[type="file"] + label {
+    @apply transition-all;
+}
+
+input[type="file"] + label:hover {
+    @apply bg-gray-50;
+}
+
+/* Estilo para o preview da imagem */
+#imagePreview img {
+    @apply transition-all;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+#imagePreview img:hover {
+    transform: scale(1.05);
+}
+
+/* Estilo para mensagens de sucesso e erro */
+#success, #error {
+    @apply transition-all;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Estilo para o spinner de carregamento */
+#loading {
+    @apply transition-all;
+}
+
+/* Estilo para o botão de submit */
+button[type="submit"] {
+    @apply transition-all;
+}
+
+button[type="submit"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+button[type="submit"]:active {
+    transform: translateY(0);
+}
+
+/* Estilo para o container principal */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Estilo para o header */
+header h1 {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para o card principal */
+.max-w-2xl {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 640px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    header h1 {
+        font-size: 1.875rem;
+    }
+    
+    .max-w-2xl {
+        padding: 1rem;
+    }
+} 
