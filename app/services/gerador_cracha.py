@@ -1,6 +1,6 @@
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import cm
+from reportlab.lib.units import cm, inch
 from PIL import Image
 from pathlib import Path
 import io
@@ -46,8 +46,8 @@ class GeradorCracha:
             logger.error(traceback.format_exc())
             return False
 
-    def _processar_imagem(self, image_path: str) -> Image.Image:
-        """Processa a imagem para garantir compatibilidade com o PDF."""
+    def _processar_imagem(self, image_path: str, target_width_cm: float, target_height_cm: float) -> Image.Image:
+        """Processa a imagem, redimensionando-a para as dimensões alvo em cm."""
         logger.debug(f"Iniciando processamento da imagem: {image_path}")
         try:
             with Image.open(image_path) as img:
@@ -63,20 +63,20 @@ class GeradorCracha:
                     logger.debug(f"Convertendo imagem do modo {img.mode} para RGB")
                     img = img.convert('RGB')
                 
-                # Redimensionar mantendo a proporção
-                target_width = int(3 * cm)
-                target_height = int(4 * cm)
-                logger.debug(f"Dimensões alvo: {target_width}x{target_height}")
+                # Redimensionar mantendo a proporção para as dimensões alvo em pixels
+                dpi = 300 # Exemplo de DPI, pode ser ajustado ou lido da imagem se disponível
+                target_width_px = int(target_width_cm * dpi / 2.54)
+                target_height_px = int(target_height_cm * dpi / 2.54)
+
+                # Calcula a nova dimensão mantendo a proporção
+                img.thumbnail((target_width_px, target_height_px), Image.Resampling.LANCZOS)
                 
-                # Calcular nova dimensão mantendo proporção
-                ratio = min(target_width/img.width, target_height/img.height)
-                new_size = (int(img.width * ratio), int(img.height * ratio))
-                logger.debug(f"Nova dimensão calculada: {new_size}")
-                
-                # Redimensionar
-                img = img.resize(new_size, Image.Resampling.LANCZOS)
                 logger.debug(f"Imagem redimensionada para: {img.size}")
                 
+                # Carregar a imagem completamente na memória para liberar o arquivo
+                img.load()
+                logger.debug("Imagem carregada completamente na memória")
+
                 return img
         except Exception as e:
             logger.error(f"Erro ao processar imagem: {str(e)}")
@@ -91,13 +91,13 @@ class GeradorCracha:
         logger.info(f"Iniciando geração de crachá para {cracha_data['nome']}")
         
         if not self._validar_formato_imagem(cracha_data['foto_path']):
-            erro = "Formato de imagem não suportado"
+            erro = "Formato de imagem da foto não suportado"
             logger.error(erro)
             raise ValueError(erro)
 
-        # Validar logo se fornecido
-        if 'logo_path' in cracha_data and not self._validar_formato_imagem(cracha_data['logo_path']):
-            erro = "Formato do logo não suportado"
+        # Validar imagem base se fornecida
+        if 'base_image_path' in cracha_data and cracha_data['base_image_path'] and not self._validar_formato_imagem(cracha_data['base_image_path']):
+            erro = "Formato da imagem base não suportado"
             logger.error(erro)
             raise ValueError(erro)
 
@@ -105,101 +105,112 @@ class GeradorCracha:
         pdf_path = self.output_dir / f"cracha_{cracha_data['matricula']}.pdf"
         logger.debug(f"Caminho do PDF: {pdf_path}")
         
+        temp_files_to_clean = [] # Para limpar arquivos temporários criados nesta função
         temp_img_path = None
-        temp_logo_path = None
+        temp_base_image_path = None
+
         try:
-            # Criar o PDF
-            c = canvas.Canvas(str(pdf_path), pagesize=A4)
-            width, height = A4
-            logger.debug(f"Dimensões do PDF: {width}x{height}")
+            # Carregar a imagem base
+            base_img_pil = Image.open(cracha_data['base_image_path'])
+            # Definir o tamanho do canvas do PDF com base na imagem base
+            pdf_width = base_img_pil.width
+            pdf_height = base_img_pil.height
+            logger.debug(f"Usando imagem base. Dimensões do PDF: {pdf_width}x{pdf_height} pontos.")
+            
+            # Salvar imagem base temporariamente para o ReportLab
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_base:
+                temp_base_image_path = temp_base.name
+                base_img_pil.save(temp_base_image_path, format='PNG')
+                logger.debug(f"Imagem base salva temporariamente: {temp_base_image_path}")
+            temp_files_to_clean.append(Path(temp_base_image_path))
 
-            # Adicionar logo se fornecido
-            if 'logo_path' in cracha_data and Path(cracha_data['logo_path']).exists():
-                logger.debug("Processando logo para o PDF")
-                try:
-                    # Processar logo
-                    with Image.open(cracha_data['logo_path']) as logo_img:
-                        # Redimensionar logo para um tamanho pequeno (1.5cm x 1.5cm)
-                        target_size = (int(1.5 * cm), int(1.5 * cm))
-                        logo_img.thumbnail(target_size, Image.Resampling.LANCZOS)
-                        
-                        # Salvar logo temporariamente
-                        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_logo:
-                            temp_logo_path = temp_logo.name
-                            logo_img.save(temp_logo_path, format='PNG')
-                            logger.debug("Logo processado e salvo temporariamente")
-                        
-                        # Adicionar logo ao PDF (canto superior direito)
-                        c.drawImage(temp_logo_path, width - 3*cm, height - 2*cm, 
-                                  width=1.5*cm, height=1.5*cm, preserveAspectRatio=True)
-                        logger.debug("Logo adicionado ao PDF")
-                except Exception as e:
-                    logger.error(f"Erro ao processar logo: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    # Continuar sem o logo em caso de erro
+            c = canvas.Canvas(str(pdf_path), pagesize=(pdf_width, pdf_height))
+            c.drawImage(temp_base_image_path, 0, 0, width=pdf_width, height=pdf_height, preserveAspectRatio=False)
+            logger.debug("Imagem base desenhada como fundo do PDF")
+            
+            # Coordenadas estimadas para a imagem base (pixels da imagem ~ pontos do PDF)
+            # CAMPUS (Instituição): ~30px from left, ~220px from bottom
+            # NOME: ~30px from left, ~190px from bottom
+            # RG: ~30px from left, ~160px from bottom
+            # MATRÍCULA: ~30px from left, ~130px from bottom
+            # MODALIDADE: ~30px from left, ~100px from bottom
+            # FOTO: ~220px from left, ~250px from bottom, ~150x200px
 
-            # Configurar fonte e tamanho
-            c.setFont("Helvetica-Bold", 14)
-            logger.debug("Fonte configurada")
+            # Ajustes finos podem ser necessários.
+            # Textos
+            text_x_offset = 30 # pontos
+            font_size = 12
+            line_height = 20 # pontos
+            c.setFont("Helvetica-Bold", font_size)
 
-            # Adicionar informações do lado esquerdo
-            c.drawString(2*cm, height - 4*cm, f"Nome: {cracha_data['nome']}")
-            c.drawString(2*cm, height - 5*cm, f"Instituição: {cracha_data['instituicao']}")
-            c.drawString(2*cm, height - 6*cm, f"Matrícula: {cracha_data['matricula']}")
-            c.drawString(2*cm, height - 7*cm, f"Modalidade: {cracha_data['modalidade']}")
-            logger.debug("Informações do crachá adicionadas")
+            # Ordem do template: CAMPUS, NOME, RG, MATRÍCULA, MODALIDADE
+            # Coordenadas y são do bottom-left
 
-            # Processar e adicionar foto do lado direito
-            if cracha_data['foto_path'] and Path(cracha_data['foto_path']).exists():
-                logger.debug("Processando foto para o PDF")
-                img = self._processar_imagem(cracha_data['foto_path'])
-                
-                # Criar arquivo temporário para a imagem processada
-                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_img:
-                    temp_img_path = temp_img.name
-                    logger.debug(f"Arquivo temporário criado: {temp_img_path}")
-                    
-                    # Salvar imagem processada no arquivo temporário
-                    img.save(temp_img_path, format='JPEG', quality=95)
-                    logger.debug("Imagem processada salva no arquivo temporário")
-                
-                # Adicionar imagem ao PDF (fora do bloco with para garantir que o arquivo esteja fechado)
-                c.drawImage(temp_img_path, width - 5*cm, height - 7*cm, 
-                           width=3*cm, height=4*cm, preserveAspectRatio=True)
-                logger.debug("Imagem adicionada ao PDF")
+            # CAMPUS (Instituição) - y estimada
+            y_instituicao = 220 # pontos
+            c.drawString(text_x_offset, y_instituicao, f"{cracha_data['instituicao']}")
 
-            # Salvar o PDF
+            # NOME - y estimada
+            y_nome = y_instituicao - line_height # 200 pontos
+            c.drawString(text_x_offset, y_nome, f"{cracha_data['nome']}")
+
+            # RG - y estimada
+            y_rg = y_nome - line_height # 180 pontos
+            c.drawString(text_x_offset, y_rg, f"{cracha_data['rg']}")
+
+            # MATRÍCULA - y estimada
+            y_matricula = y_rg - line_height # 160 pontos
+            c.drawString(text_x_offset, y_matricula, f"{cracha_data['matricula']}")
+
+            # MODALIDADE - y estimada
+            y_modalidade = y_matricula - line_height # 50 pontos
+            c.drawString(text_x_offset, y_modalidade, f"{cracha_data['modalidade']}")
+            logger.debug("Textos sobrepostos na imagem base")
+
+            # Foto do Aluno
+            # Definir o centro da área da foto no crachá base
+            # Essas coordenadas foram estimadas com base no layout atual do crachá.
+            # Se a imagem base mudar significativamente, esses valores podem precisar de ajuste.
+            CRITICAL_PHOTO_CENTER_X = 208.5 + (170 / 2) # Centro X original
+            CRITICAL_PHOTO_CENTER_Y = 570 + (210 / 2)  # Centro Y original
+
+            # Dimensões da foto em pontos (ajuste estas para mudar o tamanho da foto)
+            # Ao ajustar photo_width/photo_height, a imagem tentará manter-se centralizada
+            # em torno de CRITICAL_PHOTO_CENTER_X e CRITICAL_PHOTO_CENTER_Y.
+            photo_width = 300 # pontos   (~3cm)
+            photo_height = 210 # pontos (~4cm)
+
+            # Calcular as coordenadas X e Y para que a foto fique centralizada
+            photo_x = CRITICAL_PHOTO_CENTER_X - (photo_width / 2)
+            photo_y = CRITICAL_PHOTO_CENTER_Y - (photo_height / 2)
+
+            img_aluno = self._processar_imagem(cracha_data['foto_path'], photo_width/cm, photo_height/cm)
+            
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_img_file:
+                temp_img_path = temp_img_file.name
+                img_aluno.save(temp_img_path, format='JPEG', quality=95)
+                logger.debug(f"Foto do aluno processada e salva temporariamente: {temp_img_path}")
+            temp_files_to_clean.append(Path(temp_img_path))
+
+            c.drawImage(temp_img_path, photo_x, photo_y, 
+                       width=photo_width, height=photo_height, preserveAspectRatio=True)
+            logger.debug("Foto do aluno adicionada na imagem base")
+
+            c.showPage()
             c.save()
-            logger.debug("PDF salvo com sucesso")
-
-            # Remover arquivos temporários
-            if temp_img_path and os.path.exists(temp_img_path):
-                try:
-                    os.unlink(temp_img_path)
-                    logger.debug("Arquivo de foto temporário removido")
-                except Exception as e:
-                    logger.warning(f"Não foi possível remover o arquivo de foto temporário: {str(e)}")
-
-            if temp_logo_path and os.path.exists(temp_logo_path):
-                try:
-                    os.unlink(temp_logo_path)
-                    logger.debug("Arquivo de logo temporário removido")
-                except Exception as e:
-                    logger.warning(f"Não foi possível remover o arquivo de logo temporário: {str(e)}")
-
-            logger.info(f"PDF gerado com sucesso: {pdf_path}")
+            logger.debug("PDF salvo")
             return str(pdf_path)
-            
+        
         except Exception as e:
-            # Tentar remover arquivos temporários em caso de erro
-            for temp_path in [temp_img_path, temp_logo_path]:
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        os.unlink(temp_path)
-                        logger.debug(f"Arquivo temporário removido após erro: {temp_path}")
-                    except Exception as cleanup_error:
-                        logger.warning(f"Não foi possível remover o arquivo temporário após erro: {str(cleanup_error)}")
-            
-            logger.error(f"Erro ao gerar PDF: {str(e)}")
+            logger.error(f"Erro na geração do crachá: {str(e)}")
             logger.error(traceback.format_exc())
-            raise 
+            raise
+        finally:
+            # Limpar arquivos temporários
+            for p in temp_files_to_clean:
+                if p.exists():
+                    try:
+                        os.unlink(p)
+                        logger.debug(f"Arquivo temporário limpo: {p}")
+                    except Exception as e:
+                        logger.warning(f"Não foi possível remover o arquivo temporário {p}: {str(e)}") 

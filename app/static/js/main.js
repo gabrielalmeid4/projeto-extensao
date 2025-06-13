@@ -17,25 +17,6 @@ function previewImage(input) {
     }
 }
 
-// Função para preview do logo
-function previewLogo(input) {
-    const preview = document.getElementById('logoPreviewImg');
-    const fileName = document.getElementById('logoName');
-    const logoPreview = document.getElementById('logoPreview');
-    
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        
-        reader.onload = function(e) {
-            preview.src = e.target.result;
-            logoPreview.classList.remove('hidden');
-        }
-        
-        reader.readAsDataURL(input.files[0]);
-        fileName.textContent = input.files[0].name;
-    }
-}
-
 // Manipulação do formulário
 document.getElementById('crachaForm').addEventListener('submit', async function(e) {
     e.preventDefault();
@@ -59,15 +40,10 @@ document.getElementById('crachaForm').addEventListener('submit', async function(
         const formData = new FormData();
         formData.append('nome', document.getElementById('nome').value);
         formData.append('instituicao', document.getElementById('instituicao').value);
+        formData.append('rg', document.getElementById('rg').value);
         formData.append('matricula', document.getElementById('matricula').value);
         formData.append('modalidade', document.getElementById('modalidade').value);
         formData.append('foto', document.getElementById('foto').files[0]);
-        
-        // Adicionar logo se existir
-        const logoFile = document.getElementById('logo').files[0];
-        if (logoFile) {
-            formData.append('logo', logoFile);
-        }
         
         // Enviar requisição
         const response = await fetch('/api/gerar-cracha', {
