@@ -138,33 +138,48 @@ class GeradorCracha:
 
             # Ajustes finos podem ser necessários.
             # Textos
-            text_x_offset = 30 # pontos
-            font_size = 12
-            line_height = 20 # pontos
+            font_size = 30
             c.setFont("Helvetica-Bold", font_size)
 
+            # Função para centralizar texto
+            def get_centered_x(text, canvas_width):
+                text_width = c.stringWidth(text, "Helvetica-Bold", font_size)
+                return (canvas_width - text_width) / 2
+
+            # CONFIGURAÇÕES DE POSICIONAMENTO VERTICAL - AJUSTE ESTES VALORES CONFORME NECESSÁRIO
+            # Coordenadas Y base (em pontos) - quanto maior o valor, mais alto no crachá
+            y_base = 380  # Posição inicial (mais alta)
+            
+            # Espaçamento entre linhas (em pontos) - quanto maior, mais separado
+            espacamento_linhas = 73  # Espaçamento entre cada linha de texto
+            
             # Ordem do template: CAMPUS, NOME, RG, MATRÍCULA, MODALIDADE
             # Coordenadas y são do bottom-left
 
-            # CAMPUS (Instituição) - y estimada
-            y_instituicao = 220 # pontos
-            c.drawString(text_x_offset, y_instituicao, f"{cracha_data['instituicao']}")
+            # CAMPUS (Instituição)
+            y_instituicao = y_base
+            x_instituicao = get_centered_x(cracha_data['instituicao'], pdf_width)
+            c.drawString(x_instituicao, y_instituicao, f"{cracha_data['instituicao']}")
 
-            # NOME - y estimada
-            y_nome = y_instituicao - line_height # 200 pontos
-            c.drawString(text_x_offset, y_nome, f"{cracha_data['nome']}")
+            # NOME
+            y_nome = y_instituicao - espacamento_linhas
+            x_nome = get_centered_x(cracha_data['nome'], pdf_width)
+            c.drawString(x_nome, y_nome, f"{cracha_data['nome']}")
 
-            # RG - y estimada
-            y_rg = y_nome - line_height # 180 pontos
-            c.drawString(text_x_offset, y_rg, f"{cracha_data['rg']}")
+            # RG
+            y_rg = y_nome - espacamento_linhas
+            x_rg = get_centered_x(cracha_data['rg'], pdf_width)
+            c.drawString(x_rg, y_rg, f"{cracha_data['rg']}")
 
-            # MATRÍCULA - y estimada
-            y_matricula = y_rg - line_height # 160 pontos
-            c.drawString(text_x_offset, y_matricula, f"{cracha_data['matricula']}")
+            # MATRÍCULA
+            y_matricula = y_rg - espacamento_linhas
+            x_matricula = get_centered_x(cracha_data['matricula'], pdf_width)
+            c.drawString(x_matricula, y_matricula, f"{cracha_data['matricula']}")
 
-            # MODALIDADE - y estimada
-            y_modalidade = y_matricula - line_height # 50 pontos
-            c.drawString(text_x_offset, y_modalidade, f"{cracha_data['modalidade']}")
+            # MODALIDADE
+            y_modalidade = y_matricula - espacamento_linhas
+            x_modalidade = get_centered_x(cracha_data['modalidade'], pdf_width)
+            c.drawString(x_modalidade, y_modalidade, f"{cracha_data['modalidade']}")
             logger.debug("Textos sobrepostos na imagem base")
 
             # Foto do Aluno
